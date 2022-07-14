@@ -4,17 +4,18 @@
 #include <utility>
 #include <thread>
 
-#include <asio/ts/buffer.hpp>
-#include <asio/ts/internet.hpp>
+#include <boost/asio/ts/buffer.hpp>
+#include <boost/asio/ts/internet.hpp>
 #include "winext/named_pipe_protocol.hpp"
 
-using namespace asio;
+namespace net = boost::asio;
+using namespace winext;
 
 class session
   : public std::enable_shared_from_this<session>
 {
 public:
-  session(named_pipe_protocol<io_context::executor_type>::server_pipe pipe)
+  session(named_pipe_protocol<net::io_context::executor_type>::server_pipe pipe)
     : pipe_(std::move(pipe))
   {
   }
@@ -28,7 +29,7 @@ private:
   void do_read()
   {
     auto self(shared_from_this());
-    pipe_.async_read_some(asio::buffer(data_, max_length),
+    pipe_.async_read_some(net::buffer(data_, max_length),
         [this, self](std::error_code ec, std::size_t length)
         {
           if (!ec)
@@ -41,7 +42,7 @@ private:
   void do_write(std::size_t length)
   {
     auto self(shared_from_this());
-    asio::async_write(pipe_, asio::buffer(data_, length),
+    net::async_write(pipe_, net::buffer(data_, length),
         [this, self](std::error_code ec, std::size_t /*length*/)
         {
           if (!ec)
@@ -51,7 +52,7 @@ private:
         });
   }
 
-  named_pipe_protocol<io_context::executor_type>::server_pipe pipe_;
+  named_pipe_protocol<net::io_context::executor_type>::server_pipe pipe_;
   enum { max_length = 1024 };
   char data_[max_length];
 };
@@ -59,7 +60,7 @@ private:
 class server
 {
 public:
-  server(asio::io_context& io_context, named_pipe_protocol<asio::io_context::executor_type>::endpoint ep)
+  server(net::io_context& io_context, named_pipe_protocol<net::io_context::executor_type>::endpoint ep)
     : acceptor_(io_context, ep),
       pipe_(io_context)
   {
@@ -81,16 +82,16 @@ private:
         });
   }
 
-  named_pipe_protocol<io_context::executor_type>::acceptor acceptor_;
-  named_pipe_protocol<io_context::executor_type>::server_pipe pipe_;
+  named_pipe_protocol<net::io_context::executor_type>::acceptor acceptor_;
+  named_pipe_protocol<net::io_context::executor_type>::server_pipe pipe_;
 };
 
 void client(int i){
     try
     {
-        asio::io_context io_context;
-        named_pipe_protocol<asio::io_context::executor_type>::endpoint ep("\\\\.\\pipe\\mynamedpipe");
-        named_pipe_protocol<asio::io_context::executor_type>::client_pipe pipe(io_context);
+        net::io_context io_context;
+        named_pipe_protocol<net::io_context::executor_type>::endpoint ep("\\\\.\\pipe\\mynamedpipe");
+        named_pipe_protocol<net::io_context::executor_type>::client_pipe pipe(io_context);
         pipe.connect(ep);
 
         const int max_length = 1024;
@@ -99,11 +100,11 @@ void client(int i){
         //char request[max_length];
         //size_t request_length = std::strlen(request);
 
-        asio::write(pipe, asio::buffer(myMessage.c_str(), myMessage.length()));
+        net::write(pipe, net::buffer(myMessage.c_str(), myMessage.length()));
 
         char reply[max_length];
-        size_t reply_length = asio::read(pipe,
-            asio::buffer(reply, myMessage.length()));
+        size_t reply_length = net::read(pipe,
+            net::buffer(reply, myMessage.length()));
         std::string replyMsg = std::string(reply, myMessage.length());
 
         std::cout << "check: " << myMessage << std::endl;
@@ -122,9 +123,9 @@ int main(int argc, char* argv[])
   try
   {
 
-    asio::io_context io_context;
+    net::io_context io_context;
 
-    named_pipe_protocol<asio::io_context::executor_type>::endpoint ep("\\\\.\\pipe\\mynamedpipe");
+    named_pipe_protocol<net::io_context::executor_type>::endpoint ep("\\\\.\\pipe\\mynamedpipe");
 
     server s(io_context, ep);
 

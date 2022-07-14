@@ -2,17 +2,18 @@
 #include <iostream>
 #include <memory>
 #include <utility>
-#include <asio/ts/buffer.hpp>
-#include <asio/ts/internet.hpp>
+#include <boost/asio/ts/buffer.hpp>
+#include <boost/asio/ts/internet.hpp>
 #include "winext/named_pipe_protocol.hpp"
 
-using namespace asio;
+namespace net = boost::asio;
+using namespace winext;
 
 class session
   : public std::enable_shared_from_this<session>
 {
 public:
-  session(named_pipe_protocol<io_context::executor_type>::server_pipe pipe)
+  session(named_pipe_protocol<net::io_context::executor_type>::server_pipe pipe)
     : pipe_(std::move(pipe))
   {
     std::cout << "session constructed" << std::endl;
@@ -28,8 +29,8 @@ private:
   {
     std::cout<<"do_read"<<std::endl;
     auto self(shared_from_this());
-    pipe_.async_read_some(asio::buffer(data_, max_length),
-        [this, self](std::error_code ec, std::size_t length)
+    pipe_.async_read_some(net::buffer(data_, max_length),
+        [this, self](boost::system::error_code ec, std::size_t length)
         {
           std::cout<<"do_read handler"<<std::endl;
           if (!ec)
@@ -43,7 +44,7 @@ private:
   {
     std::cout<<"do_write"<<std::endl;
     auto self(shared_from_this());
-    asio::async_write(pipe_, asio::buffer(data_, length),
+    net::async_write(pipe_, net::buffer(data_, length),
         [this, self](std::error_code ec, std::size_t /*length*/)
         {
           std::cout<<"do_write handler"<<std::endl;
@@ -54,7 +55,7 @@ private:
         });
   }
 
-  named_pipe_protocol<io_context::executor_type>::server_pipe pipe_;
+  named_pipe_protocol<net::io_context::executor_type>::server_pipe pipe_;
   enum { max_length = 1024 };
   char data_[max_length];
 };
@@ -62,7 +63,7 @@ private:
 class server
 {
 public:
-  server(asio::io_context& io_context, named_pipe_protocol<asio::io_context::executor_type>::endpoint ep)
+  server(net::io_context& io_context, named_pipe_protocol<net::io_context::executor_type>::endpoint ep)
     : acceptor_(io_context, ep),
       pipe_(io_context)
   {
@@ -74,7 +75,7 @@ private:
   {
     std::cout<<"do_accept"<<std::endl;
     acceptor_.async_accept(pipe_,
-        [this](std::error_code ec)
+        [this](boost::system::error_code ec)
         {
           std::cout<<"do_accept handler"<<std::endl;
           if (!ec)
@@ -86,8 +87,8 @@ private:
         });
   }
 
-  named_pipe_protocol<asio::io_context::executor_type>::acceptor acceptor_;
-  named_pipe_protocol<io_context::executor_type>::server_pipe pipe_;
+  named_pipe_protocol<net::io_context::executor_type>::acceptor acceptor_;
+  named_pipe_protocol<net::io_context::executor_type>::server_pipe pipe_;
 };
 
 int main(int argc, char* argv[])
@@ -95,9 +96,9 @@ int main(int argc, char* argv[])
   try
   {
 
-    asio::io_context io_context;
+    net::io_context io_context;
 
-    named_pipe_protocol<asio::io_context::executor_type>::endpoint ep("\\\\.\\pipe\\mynamedpipe");
+    named_pipe_protocol<net::io_context::executor_type>::endpoint ep("\\\\.\\pipe\\mynamedpipe");
 
     server s(io_context, ep);
 

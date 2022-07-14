@@ -7,11 +7,11 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#include <asio/detail/config.hpp>
-#include <asio/detail/type_traits.hpp>
-#include "asio/any_io_executor.hpp"
-#include "asio/windows/stream_handle.hpp"
-#include "asio/windows/object_handle.hpp"
+#include <boost/asio/detail/config.hpp>
+#include <boost/asio/detail/type_traits.hpp>
+#include "boost/asio/any_io_executor.hpp"
+#include "boost/asio/windows/stream_handle.hpp"
+#include "boost/asio/windows/object_handle.hpp"
 
 #include "winext/named_pipe_client_details.hpp"
 
@@ -21,19 +21,19 @@
 
 #include <iostream> //debug
 
-namespace asio {
+namespace winext {
 
 // maybe just a alias to stream handle
 
 // template <typename Executor = any_io_executor>
 // class named_pipe_protocol;
 
-template <typename Executor = any_io_executor>
+template <typename Executor = boost::asio::any_io_executor>
 class named_pipe_acceptor;
 
 // pipe for server
-template <typename Executor = any_io_executor>
-class server_named_pipe : public windows::basic_stream_handle<Executor> {
+template <typename Executor = boost::asio::any_io_executor>
+class server_named_pipe : public boost::asio::windows::basic_stream_handle<Executor> {
 public:
     typedef Executor executor_type;
 
@@ -45,15 +45,15 @@ public:
         typedef server_named_pipe<Executor1> other;
     };
 
-    server_named_pipe(executor_type& ex) : windows::basic_stream_handle<executor_type>(ex), oOverlap_(),o_(ex){}
+    server_named_pipe(executor_type& ex) : boost::asio::windows::basic_stream_handle<executor_type>(ex), oOverlap_(),o_(ex){}
 
     template<typename ExecutionContext>
-    server_named_pipe(ExecutionContext& context, typename constraint<
-        is_convertible<ExecutionContext&, execution_context&>::value
-      >::type = 0) : windows::basic_stream_handle<executor_type>(context.get_executor()), oOverlap_(),o_(context.get_executor()){}
+    server_named_pipe(ExecutionContext& context, typename boost::asio::constraint<
+        boost::asio::is_convertible<ExecutionContext&, boost::asio::execution_context&>::value
+      >::type = 0) : boost::asio::windows::basic_stream_handle<executor_type>(context.get_executor()), oOverlap_(),o_(context.get_executor()){}
 
     server_named_pipe(server_named_pipe&& other)
-    : windows::basic_stream_handle<executor_type>(std::move(other))
+    : boost::asio::windows::basic_stream_handle<executor_type>(std::move(other))
         ,o_(std::move(other.o_)),oOverlap_(other.oOverlap_)
     {
         std::cout<< "pipe moved" << std::endl;
@@ -70,29 +70,29 @@ public:
     OVERLAPPED oOverlap_; // TODO make private
 
     // not used in v1
-    windows::basic_object_handle<executor_type> o_;
+    boost::asio::windows::basic_object_handle<executor_type> o_;
 private:
 };
 
 
-template <typename Executor = any_io_executor>
-class client_named_pipe : public windows::basic_stream_handle<Executor>{
+template <typename Executor = boost::asio::any_io_executor>
+class client_named_pipe : public boost::asio::windows::basic_stream_handle<Executor>{
 public:
     typedef Executor executor_type;
     typedef std::string endpoint_type;
 
-    client_named_pipe(executor_type& ex) : windows::basic_stream_handle<executor_type>(ex){}
+    client_named_pipe(executor_type& ex) : boost::asio::windows::basic_stream_handle<executor_type>(ex){}
 
     template<typename ExecutionContext>
-    client_named_pipe(ExecutionContext& context, typename constraint<
-        is_convertible<ExecutionContext&, execution_context&>::value
-      >::type = 0) : windows::basic_stream_handle<executor_type>(context.get_executor()){}
+    client_named_pipe(ExecutionContext& context, typename boost::asio::constraint<
+        boost::asio::is_convertible<ExecutionContext&, boost::asio::execution_context&>::value
+      >::type = 0) : boost::asio::windows::basic_stream_handle<executor_type>(context.get_executor()){}
 
-    ASIO_SYNC_OP_VOID connect(const endpoint_type& endpoint,
-        asio::error_code& ec){
+    BOOST_ASIO_SYNC_OP_VOID connect(const endpoint_type& endpoint,
+        boost::system::error_code& ec){
         
-        if(windows::basic_stream_handle<executor_type>::is_open()){
-            windows::basic_stream_handle<executor_type>::close();
+        if(boost::asio::windows::basic_stream_handle<executor_type>::is_open()){
+           boost::asio::windows::basic_stream_handle<executor_type>::close();
         }
 
         HANDLE hPipe = NULL;
@@ -100,17 +100,17 @@ public:
 
         if(ec)
         {
-            ASIO_SYNC_OP_VOID_RETURN(ec); 
+            BOOST_ASIO_SYNC_OP_VOID_RETURN(ec); 
         }
         // assign the pipe to super class
-        windows::basic_stream_handle<executor_type>::assign(hPipe);
-        ASIO_SYNC_OP_VOID_RETURN(ec);    
+        boost::asio::windows::basic_stream_handle<executor_type>::assign(hPipe);
+        BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);    
     }
 
     void connect(const endpoint_type &endpoint) {
-        asio::error_code ec;
+        boost::system::error_code ec;
         this->connect(endpoint,ec);
-        asio::detail::throw_error(ec, "connect");
+        boost::asio::detail::throw_error(ec, "connect");
     }
 };
 

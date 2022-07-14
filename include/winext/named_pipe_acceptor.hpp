@@ -8,9 +8,10 @@
 
 #include "winext/named_pipe.hpp"
 #include "winext/named_pipe_server_details.hpp"
-#include "asio/compose.hpp"
+#include "boost/asio/compose.hpp"
+#include "boost/asio/windows/basic_object_handle.hpp"
 
-namespace asio{
+namespace winext{
 
 template <typename Executor>
 class named_pipe_acceptor{
@@ -30,8 +31,8 @@ public:
 
     template<typename ExecutionContext>
     explicit named_pipe_acceptor(ExecutionContext& context, const endpoint_type endpoint,
-    typename constraint<
-        is_convertible<ExecutionContext&, execution_context&>::value
+    typename boost::asio::constraint<
+        boost::asio::is_convertible<ExecutionContext&, boost::asio::execution_context&>::value
       >::type = 0):
         endpoint_(endpoint), executor_(context.get_executor()), pipe_(context), o_(context)
     {
@@ -47,16 +48,16 @@ public:
     // next client connection can be accepted in to pipe again.
     // handler signature: void(error_code)
     template <
-        ASIO_COMPLETION_TOKEN_FOR(void (asio::error_code))
-        AcceptToken ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
-        ASIO_INITFN_AUTO_RESULT_TYPE(AcceptToken,
+        BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code))
+        AcceptToken BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+        BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(AcceptToken,
         void (asio::error_code))
     async_accept(
         server_named_pipe<executor_type> & pipe,
-        ASIO_MOVE_ARG(AcceptToken) token
-        ASIO_DEFAULT_COMPLETION_TOKEN(executor_type)){
+        BOOST_ASIO_MOVE_ARG(AcceptToken) token
+        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type)){
 
-        return asio::async_compose<AcceptToken, void (asio::error_code)>(
+        return boost::asio::async_compose<AcceptToken, void (boost::system::error_code)>(
             details::async_accept_op<executor_type>(&pipe, this->endpoint_), token, pipe
         );
     }
@@ -64,22 +65,21 @@ public:
     // TODO: fix move and rebind executor
     // handler signature: void(error_code, pipe)
     template <
-        ASIO_COMPLETION_TOKEN_FOR(void (asio::error_code,
+        BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
             server_named_pipe<executor_type>)) MoveAcceptToken
-                ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
-    ASIO_INITFN_AUTO_RESULT_TYPE(MoveAcceptToken,
-        void (asio::error_code, 
+                BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(MoveAcceptToken,
+        void (boost::system::error_code, 
             server_named_pipe<executor_type>))
     async_accept(
-        ASIO_MOVE_ARG(MoveAcceptToken) token
-            ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        BOOST_ASIO_MOVE_ARG(MoveAcceptToken) token
+            BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
     {
         // std::cout << "async_accept func" << std::endl;
 
-        return asio::async_compose<MoveAcceptToken, void (asio::error_code, server_named_pipe<executor_type>)>(
+        return boost::asio::async_compose<MoveAcceptToken, void (boost::system::error_code, server_named_pipe<executor_type>)>(
             details::async_move_accept_op<executor_type>(&this->pipe_, this->endpoint_), token, this->pipe_
         );
-
     }
 
     const endpoint_type endpoint_;
@@ -89,7 +89,7 @@ private:
     server_named_pipe<executor_type> pipe_;
 
     // shared event
-    windows::basic_object_handle<executor_type> o_;
+    boost::asio::windows::basic_object_handle<executor_type> o_;
 };
 
 } // namespace asio

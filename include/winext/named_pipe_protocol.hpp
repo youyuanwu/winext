@@ -10,7 +10,7 @@
 #include "winext/named_pipe_acceptor.hpp"
 
 
-namespace asio{
+namespace winext{
 
 template <typename Executor = any_io_executor>
 class named_pipe_protocol{

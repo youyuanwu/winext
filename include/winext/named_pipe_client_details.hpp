@@ -5,13 +5,13 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-namespace asio{
+namespace winext{
 
 namespace details{
 
 // client connect to the namedpipe, 
 // return the ok handle. Caller is responsible for freeing the handle.
-inline void client_connect(asio::error_code & ec, HANDLE& pipe_ret, std::string const & endpoint){
+inline void client_connect(boost::system::error_code & ec, HANDLE& pipe_ret, std::string const & endpoint){
     HANDLE hPipe;
     BOOL fSuccess = FALSE;
     DWORD dwMode;
@@ -40,8 +40,8 @@ inline void client_connect(asio::error_code & ec, HANDLE& pipe_ret, std::string 
         if (last_error != ERROR_PIPE_BUSY)
         {
             // printf("Could not open pipe. GLE=%d\n", GetLastError());
-            ec = asio::error_code(last_error,
-                    asio::error::get_system_category());
+            ec = boost::system::error_code(last_error,
+                    boost::asio::error::get_system_category());
             return;
         }
 
@@ -51,7 +51,7 @@ inline void client_connect(asio::error_code & ec, HANDLE& pipe_ret, std::string 
         {
             printf("Could not open pipe: 20 second wait timed out.");
             //return -1;
-            ec = asio::error::timed_out;
+            ec = boost::asio::error::timed_out;
             return;
         }
     }
@@ -66,8 +66,8 @@ inline void client_connect(asio::error_code & ec, HANDLE& pipe_ret, std::string 
     if (!fSuccess)
     {
         // printf("SetNamedPipeHandleState failed. GLE=%d\n", GetLastError());
-        ec = asio::error_code(last_error,
-                    asio::error::get_system_category());
+        ec = boost::system::error_code(last_error,
+                    boost::system::system_category());
         return;
     }
     pipe_ret = hPipe;

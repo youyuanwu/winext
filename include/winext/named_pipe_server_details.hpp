@@ -5,11 +5,11 @@
 # pragma once
 #endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
 
-#include "asio/coroutine.hpp"
+#include "boost/asio/coroutine.hpp"
 
 #include <iostream>
 
-namespace asio{
+namespace winext{
 namespace details{
 
 // For server pipe.
@@ -20,7 +20,7 @@ inline void accept_detail(
         HANDLE& event_ret,
         OVERLAPPED & overlapped,
         std::string const &endpoint, 
-        asio::error_code & ret)
+        boost::system::error_code & ret)
 {
     //std::cout << "accept_detail" << std::endl;
     // Create event and assign to pipe and its overlap struct
@@ -33,8 +33,8 @@ inline void accept_detail(
     if(hEvent == NULL)
     {
         DWORD last_error = ::GetLastError();
-        asio::error_code pec = asio::error_code(last_error,
-                asio::error::get_system_category());
+        boost::system::error_code pec = boost::system::error_code(last_error,
+                boost::asio::error::get_system_category());
         ret = pec;
         return;
     }
@@ -58,8 +58,8 @@ inline void accept_detail(
     {
         // printf("CreateNamedPipe failed with %d.\n", GetLastError());
         DWORD last_error = ::GetLastError();
-        asio::error_code pec = asio::error_code(last_error,
-                asio::error::get_system_category());
+        boost::system::error_code pec = boost::system::error_code(last_error,
+                boost::asio::error::get_system_category());
         ret = pec;
         return;
     }
@@ -77,8 +77,8 @@ inline void accept_detail(
     {
         // printf("ConnectNamedPipe failed with %d.\n", GetLastError());
         DWORD last_error = ::GetLastError();
-        asio::error_code pec = asio::error_code(last_error,
-                asio::error::get_system_category());
+        boost::system::error_code pec = boost::system::error_code(last_error,
+                boost::system::system_category());
         ret = pec;
         return;
     }
@@ -100,8 +100,8 @@ inline void accept_detail(
         {
             // printf("ConnectNamedPipe failed with %d.\n", GetLastError());
             DWORD last_error = ::GetLastError();
-            asio::error_code pec = asio::error_code(last_error,
-                    asio::error::get_system_category());
+            boost::system::error_code pec = boost::system::error_code(last_error,
+                    boost::asio::error::get_system_category());
             ret = pec;
             return;
         }
@@ -113,7 +113,7 @@ inline void accept_detail(
 
 // handler of signature void(error_code, pipe)
 template<typename Executor>
-class async_move_accept_op : ::asio::coroutine {
+class async_move_accept_op : boost::asio::coroutine {
 public:
     typedef std::string endpoint_type;
 
@@ -121,7 +121,7 @@ public:
         pipe_(pipe), endpoint_(endpoint){}
 
     template <typename Self>
-    void operator()(Self& self, asio::error_code ec = {}) {
+    void operator()(Self& self, boost::system::error_code ec = {}) {
         // std::cout << "async_move_accept_op" << std::endl;
         if (ec) {
             // std::cout << "async_move_accept_op has error" << std::endl;
@@ -132,7 +132,7 @@ public:
         HANDLE hEvent = NULL;
 
         // TODO: maybe this does not need coro or compose.
-        ASIO_CORO_REENTER(*this) {
+        BOOST_ASIO_CORO_REENTER(*this) {
             //std::cout << "async_move_accept_op start" << std::endl;
             // initialize the pipe and assign handle to pipe_ owner
             details::accept_detail(hPipe, hEvent, pipe_->oOverlap_,endpoint_,ec);
@@ -145,8 +145,8 @@ public:
             pipe_->o_.assign(hEvent);
 
             // std::cout << "async_move_accept_op wait" << std::endl;
-            ASIO_CORO_YIELD {
-                pipe_->o_.async_wait([self=std::move(self), p = pipe_](asio::error_code ec) mutable { 
+            BOOST_ASIO_CORO_YIELD {
+                pipe_->o_.async_wait([self=std::move(self), p = pipe_](boost::system::error_code ec) mutable { 
                     // std::cout << "async_move_accept_op async_wait handle called" << std::endl;
                     // if(ec){
                     //     std::cout << "async_move_accept_op async_wait handle error: "<< ec.message() << std::endl;
@@ -167,7 +167,7 @@ private:
 
 // handler of signature void(error_code)
 template<typename Executor>
-class async_accept_op : ::asio::coroutine {
+class async_accept_op : boost::asio::coroutine {
 public:
     typedef std::string endpoint_type;
 
@@ -175,7 +175,7 @@ public:
         pipe_(pipe), endpoint_(endpoint){}
 
     template <typename Self>
-    void operator()(Self& self, asio::error_code ec = {}) {
+    void operator()(Self& self, boost::system::error_code ec = {}) {
         // std::cout << "async_move_accept_op" << std::endl;
         if (ec) {
             // std::cout << "async_move_accept_op has error" << std::endl;
@@ -186,7 +186,7 @@ public:
         HANDLE hEvent = NULL;
 
         // TODO: maybe this does not need coro or compose.
-        ASIO_CORO_REENTER(*this) {
+        BOOST_ASIO_CORO_REENTER(*this) {
             //std::cout << "async_move_accept_op start" << std::endl;
             // initialize the pipe and assign handle to pipe_ owner
             details::accept_detail(hPipe, hEvent, pipe_->oOverlap_,endpoint_,ec);
@@ -199,8 +199,8 @@ public:
             pipe_->o_.assign(hEvent);
 
             // std::cout << "async_move_accept_op wait" << std::endl;
-            ASIO_CORO_YIELD {
-                pipe_->o_.async_wait([self=std::move(self)](asio::error_code ec) mutable { 
+            BOOST_ASIO_CORO_YIELD {
+                pipe_->o_.async_wait([self=std::move(self)](boost::system::error_code ec) mutable { 
                     // std::cout << "async_move_accept_op async_wait handle called" << std::endl;
                     // if(ec){
                     //     std::cout << "async_move_accept_op async_wait handle error: "<< ec.message() << std::endl;

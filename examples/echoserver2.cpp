@@ -2,12 +2,13 @@
 #include <iostream>
 #include <memory>
 #include <utility>
-#include "asio.hpp"
+#include "boost/asio.hpp"
 #include "winext/named_pipe_protocol.hpp"
 
 //using asio::ip::tcp;
 
-using namespace asio;
+using namespace boost::asio;
+using namespace winext;
 
 class session
   : public std::enable_shared_from_this<session>
@@ -29,7 +30,7 @@ private:
   {
     std::cout<<"do_read"<<std::endl;
     auto self(shared_from_this());
-    socket_.async_read_some(asio::buffer(data_, max_length),
+    socket_.async_read_some(boost::asio::buffer(data_, max_length),
         [this, self](std::error_code ec, std::size_t length)
         {
           std::cout<<"do_read handler"<<std::endl;
@@ -46,7 +47,7 @@ private:
   {
     std::cout<<"do_write"<<std::endl;
     auto self(shared_from_this());
-    asio::async_write(socket_, asio::buffer(data_, length),
+    boost::asio::async_write(socket_, boost::asio::buffer(data_, length),
         [this, self](std::error_code ec, std::size_t /*length*/)
         {
           std::cout<<"do_write handler"<<std::endl;
@@ -57,7 +58,7 @@ private:
         });
   }
 
-  named_pipe_protocol<io_context::executor_type>::server_pipe socket_;
+  named_pipe_protocol<boost::asio::io_context::executor_type>::server_pipe socket_;
   enum { max_length = 1024 };
   char data_[max_length];
 };
@@ -65,7 +66,7 @@ private:
 class server
 {
 public:
-  server(asio::io_context& io_context, named_pipe_protocol<asio::io_context::executor_type>::endpoint ep)
+  server(boost::asio::io_context& io_context, named_pipe_protocol<boost::asio::io_context::executor_type>::endpoint ep)
     : acceptor_(io_context, ep)
   {
     do_accept();
@@ -76,7 +77,7 @@ private:
   {
     std::cout<<"do_accept"<<std::endl;
     acceptor_.async_accept(
-        [this](asio::error_code ec, named_pipe_protocol<io_context::executor_type>::server_pipe socket)
+        [this](boost::system::error_code ec, named_pipe_protocol<io_context::executor_type>::server_pipe socket)
         {
           if (!ec)
           {
@@ -90,7 +91,7 @@ private:
         });
   }
 
-  named_pipe_protocol<asio::io_context::executor_type>::acceptor acceptor_;
+  named_pipe_protocol<boost::asio::io_context::executor_type>::acceptor acceptor_;
 };
 
 int main(int argc, char* argv[])
@@ -103,9 +104,9 @@ int main(int argc, char* argv[])
     //   return 1;
     // }
 
-    asio::io_context io_context;
+    boost::asio::io_context io_context;
 
-    named_pipe_protocol<asio::io_context::executor_type>::endpoint ep("\\\\.\\pipe\\mynamedpipe");
+    named_pipe_protocol<boost::asio::io_context::executor_type>::endpoint ep("\\\\.\\pipe\\mynamedpipe");
 
     server s(io_context, ep);
 

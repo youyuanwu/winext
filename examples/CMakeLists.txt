@@ -2,6 +2,8 @@
 
 set (CMAKE_CXX_STANDARD 20)
 
+message(STATUS "Configuring examples")
+
 file(GLOB SOURCES
 echoserver_coro.cpp
 echoserver2.cpp

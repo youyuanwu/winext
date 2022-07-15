@@ -15,29 +15,12 @@ namespace details{
 // For server pipe.
 // create namedpipe and event, and make server listen on this pipe
 // and return handles to caller. caller is responsible to free the handles.
-inline void accept_detail(
+inline void accept_detail2(
         HANDLE& pipe_ret,
-        HANDLE& event_ret,
-        OVERLAPPED & overlapped,
+        boost::asio::windows::overlapped_ptr &optr,
         std::string const &endpoint, 
         boost::system::error_code & ret)
 {
-    //std::cout << "accept_detail" << std::endl;
-    // Create event and assign to pipe and its overlap struct
-    HANDLE hEvent = CreateEvent( 
-    NULL,    // default security attribute 
-    TRUE,    // manual-reset event  ??
-    TRUE,    // initial state = signaled 
-    NULL);   // unnamed event object
-
-    if(hEvent == NULL)
-    {
-        DWORD last_error = ::GetLastError();
-        boost::system::error_code pec = boost::system::error_code(last_error,
-                boost::asio::error::get_system_category());
-        ret = pec;
-        return;
-    }
 
     const int bufsize = 512;
 
@@ -69,9 +52,8 @@ inline void accept_detail(
     //pipe->assign(hPipe);
 
     // wait for client to connect
-    overlapped.hEvent = hEvent;
     bool fConnected = false; 
-    fConnected = ConnectNamedPipe(hPipe, &overlapped);
+    fConnected = ConnectNamedPipe(hPipe, optr.get());
     // Overlapped ConnectNamedPipe should return zero. 
     if (fConnected)
     {
@@ -89,12 +71,16 @@ inline void accept_detail(
         case ERROR_IO_PENDING: 
             // OS should have triggered callback
             // std::cout<< "pipe io pending" <<std::endl;
+            optr.release(); // let io_context own the callback
             break; 
         // Client is already connected, so signal an event. 
         case ERROR_PIPE_CONNECTED:
             // std::cout<< "pipe already connected" <<std::endl;
-            if (SetEvent(hEvent)) // trigger callback here
+            if (SetEvent(optr.get()->hEvent)) // trigger callback here
+            {
+                optr.release(); // let io_context own the callback
                 break; 
+            }
         // If an error occurs during the connect operation... 
         default: 
         {
@@ -102,14 +88,16 @@ inline void accept_detail(
             DWORD last_error = ::GetLastError();
             boost::system::error_code pec = boost::system::error_code(last_error,
                     boost::asio::error::get_system_category());
+            optr.complete(pec, 0);
             ret = pec;
             return;
         }
     }
     pipe_ret = hPipe;
-    event_ret = hEvent;
     // std::cout << "accept_detail: pipe constructed" << std::endl;
 }
+
+
 
 // handler of signature void(error_code, pipe)
 template<typename Executor>
@@ -129,40 +117,26 @@ public:
             return;
         }
         HANDLE hPipe = NULL;
-        HANDLE hEvent = NULL;
-
-        // TODO: maybe this does not need coro or compose.
-        BOOST_ASIO_CORO_REENTER(*this) {
-            //std::cout << "async_move_accept_op start" << std::endl;
-            // initialize the pipe and assign handle to pipe_ owner
-            details::accept_detail(hPipe, hEvent, pipe_->oOverlap_,endpoint_,ec);
-            if(ec){
-                std::cout << "async_move_accept_op accept detail error: "<< ec.message() << std::endl;
-                self.complete(ec,std::move(*pipe_));
-                return;    
-            }
-            pipe_->assign(hPipe);
-            pipe_->o_.assign(hEvent);
-
-            // std::cout << "async_move_accept_op wait" << std::endl;
-            BOOST_ASIO_CORO_YIELD {
-                pipe_->o_.async_wait([self=std::move(self), p = pipe_](boost::system::error_code ec) mutable { 
-                    // std::cout << "async_move_accept_op async_wait handle called" << std::endl;
-                    // if(ec){
-                    //     std::cout << "async_move_accept_op async_wait handle error: "<< ec.message() << std::endl;
-                    // }
-                    self.complete(ec, std::move(*p));
-                });
-            }
-            return;
+       
+        pipe_->optr_.reset(pipe_->get_executor(),
+                [self=std::move(self), p = pipe_](boost::system::error_code ec, std::size_t) mutable{
+                std::cout << "optr handler called."<< ec.message() << std::endl;
+                self.complete(ec, std::move(*p));
+            });
+        
+        details::accept_detail2(hPipe, pipe_->optr_, endpoint_, ec);
+        if(ec){
+            std::cout << "accept_detail2 failed:"<< ec.message() << std::endl;
+            self.complete(ec, std::move(*pipe_));
         }
+        pipe_->assign(hPipe);
     }
 
 private:
     // pipe for movable case is the pipe holder in acceptor, which needs to moved to handler function,
     // so that to free acceptor pipe holder to handle the next connection.
     server_named_pipe<Executor> *pipe_;
-    endpoint_type endpoint_;
+    endpoint_type const endpoint_;
 };
 
 // handler of signature void(error_code)
@@ -183,40 +157,26 @@ public:
             return;
         }
         HANDLE hPipe = NULL;
-        HANDLE hEvent = NULL;
-
-        // TODO: maybe this does not need coro or compose.
-        BOOST_ASIO_CORO_REENTER(*this) {
-            //std::cout << "async_move_accept_op start" << std::endl;
-            // initialize the pipe and assign handle to pipe_ owner
-            details::accept_detail(hPipe, hEvent, pipe_->oOverlap_,endpoint_,ec);
-            if(ec){
-                std::cout << "async_move_accept_op accept detail error: "<< ec.message() << std::endl;
+       
+        pipe_->optr_.reset(pipe_->get_executor(),
+                [self=std::move(self)](boost::system::error_code ec, std::size_t) mutable{
+                std::cout << "optr handler called."<< ec.message() << std::endl;
                 self.complete(ec);
-                return;    
-            }
-            pipe_->assign(hPipe);
-            pipe_->o_.assign(hEvent);
-
-            // std::cout << "async_move_accept_op wait" << std::endl;
-            BOOST_ASIO_CORO_YIELD {
-                pipe_->o_.async_wait([self=std::move(self)](boost::system::error_code ec) mutable { 
-                    // std::cout << "async_move_accept_op async_wait handle called" << std::endl;
-                    // if(ec){
-                    //     std::cout << "async_move_accept_op async_wait handle error: "<< ec.message() << std::endl;
-                    // }
-                    self.complete(ec);
-                });
-            }
-            return;
+            });
+        
+        details::accept_detail2(hPipe, pipe_->optr_, endpoint_, ec);
+        if(ec){
+            std::cout << "accept_detail2 failed:"<< ec.message() << std::endl;
+            self.complete(ec);
         }
+        pipe_->assign(hPipe);
     }
 
 private:
     // pipe for movable case is the pipe holder in acceptor, which needs to moved to handler function,
     // so that to free acceptor pipe holder to handle the next connection.
     server_named_pipe<Executor> *pipe_;
-    endpoint_type endpoint_;
+    endpoint_type const endpoint_;
 };
 
 

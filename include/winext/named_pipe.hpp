@@ -12,6 +12,7 @@
 #include "boost/asio/any_io_executor.hpp"
 #include "boost/asio/windows/stream_handle.hpp"
 #include "boost/asio/windows/object_handle.hpp"
+#include "boost/asio/windows/overlapped_ptr.hpp"
 
 #include "winext/named_pipe_client_details.hpp"
 
@@ -45,32 +46,33 @@ public:
         typedef server_named_pipe<Executor1> other;
     };
 
-    server_named_pipe(executor_type& ex) : boost::asio::windows::basic_stream_handle<executor_type>(ex), oOverlap_(),o_(ex){}
+    server_named_pipe(executor_type& ex) : boost::asio::windows::basic_stream_handle<executor_type>(ex), optr_(){}
 
     template<typename ExecutionContext>
     server_named_pipe(ExecutionContext& context, typename boost::asio::constraint<
         boost::asio::is_convertible<ExecutionContext&, boost::asio::execution_context&>::value
-      >::type = 0) : boost::asio::windows::basic_stream_handle<executor_type>(context.get_executor()), oOverlap_(),o_(context.get_executor()){}
+      >::type = 0) : boost::asio::windows::basic_stream_handle<executor_type>(context.get_executor()), optr_(){}
 
     server_named_pipe(server_named_pipe&& other)
     : boost::asio::windows::basic_stream_handle<executor_type>(std::move(other))
-        ,o_(std::move(other.o_)),oOverlap_(other.oOverlap_)
     {
         std::cout<< "pipe moved" << std::endl;
     }
 
-    void assign_event_handle(HANDLE hEvent){
-        // not used for now
-        // this->o_.assign(hEvent);
-        this->oOverlap_.hEvent = hEvent;
+    ~server_named_pipe()
+    {
+        using pipe = boost::asio::windows::basic_stream_handle<executor_type>;
+        if(pipe::is_open())
+        {
+            pipe::cancel();
+            if(!DisconnectNamedPipe(pipe::native_handle())){
+                boost::system::error_code ec = boost::system::error_code(static_cast<int>(GetLastError()), boost::system::system_category());
+                std::cout << "disconnecting np failed" << ec.message() <<std::endl;
+            }
+        }
     }
 
-    // oOverlap passed into ConnectNamedPipe needs to be preserved before async calls finish,
-    // otherwise there is a invalid memory write in the winio service.
-    OVERLAPPED oOverlap_; // TODO make private
-
-    // not used in v1
-    boost::asio::windows::basic_object_handle<executor_type> o_;
+    boost::asio::windows::overlapped_ptr optr_;
 private:
 };
 

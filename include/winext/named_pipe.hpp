@@ -11,7 +11,6 @@
 #include <boost/asio/detail/type_traits.hpp>
 #include "boost/asio/any_io_executor.hpp"
 #include "boost/asio/windows/stream_handle.hpp"
-#include "boost/asio/windows/object_handle.hpp"
 #include "boost/asio/windows/overlapped_ptr.hpp"
 
 #include "winext/named_pipe_client_details.hpp"
@@ -46,12 +45,12 @@ public:
         typedef server_named_pipe<Executor1> other;
     };
 
-    server_named_pipe(executor_type& ex) : boost::asio::windows::basic_stream_handle<executor_type>(ex), optr_(){}
+    server_named_pipe(executor_type& ex) : boost::asio::windows::basic_stream_handle<executor_type>(ex){}
 
     template<typename ExecutionContext>
     server_named_pipe(ExecutionContext& context, typename boost::asio::constraint<
         boost::asio::is_convertible<ExecutionContext&, boost::asio::execution_context&>::value
-      >::type = 0) : boost::asio::windows::basic_stream_handle<executor_type>(context.get_executor()), optr_(){}
+      >::type = 0) : boost::asio::windows::basic_stream_handle<executor_type>(context.get_executor()){}
 
     server_named_pipe(server_named_pipe&& other)
     : boost::asio::windows::basic_stream_handle<executor_type>(std::move(other))
@@ -71,9 +70,6 @@ public:
             }
         }
     }
-
-    boost::asio::windows::overlapped_ptr optr_;
-private:
 };
 
 

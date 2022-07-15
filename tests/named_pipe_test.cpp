@@ -155,7 +155,7 @@ TEST(NamedPipe, echo)
     }
 
     // lauch client threads
-    auto client_count = 1;
+    auto client_count = 3;
     std::vector<std::thread> client_threads;
     for(int n = 0; n < client_count; ++n)
     {

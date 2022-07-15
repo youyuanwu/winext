@@ -118,13 +118,13 @@ public:
         }
         HANDLE hPipe = NULL;
        
-        pipe_->optr_.reset(pipe_->get_executor(),
-                [self=std::move(self), p = pipe_](boost::system::error_code ec, std::size_t) mutable{
+        boost::asio::windows::overlapped_ptr optr(pipe_->get_executor(), 
+            [self=std::move(self), p = pipe_](boost::system::error_code ec, std::size_t) mutable{
                 std::cout << "optr handler called."<< ec.message() << std::endl;
                 self.complete(ec, std::move(*p));
             });
         
-        details::accept_detail2(hPipe, pipe_->optr_, endpoint_, ec);
+        details::accept_detail2(hPipe, optr, endpoint_, ec);
         if(ec){
             std::cout << "accept_detail2 failed:"<< ec.message() << std::endl;
             self.complete(ec, std::move(*pipe_));
@@ -158,13 +158,13 @@ public:
         }
         HANDLE hPipe = NULL;
        
-        pipe_->optr_.reset(pipe_->get_executor(),
-                [self=std::move(self)](boost::system::error_code ec, std::size_t) mutable{
+        boost::asio::windows::overlapped_ptr optr(pipe_->get_executor(), 
+            [self=std::move(self)](boost::system::error_code ec, std::size_t) mutable{
                 std::cout << "optr handler called."<< ec.message() << std::endl;
                 self.complete(ec);
             });
         
-        details::accept_detail2(hPipe, pipe_->optr_, endpoint_, ec);
+        details::accept_detail2(hPipe, optr, endpoint_, ec);
         if(ec){
             std::cout << "accept_detail2 failed:"<< ec.message() << std::endl;
             self.complete(ec);

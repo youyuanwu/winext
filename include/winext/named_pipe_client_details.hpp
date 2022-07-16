@@ -11,7 +11,12 @@ namespace details{
 
 // client connect to the namedpipe, 
 // return the ok handle. Caller is responsible for freeing the handle.
-inline void client_connect(boost::system::error_code & ec, HANDLE& pipe_ret, std::string const & endpoint){
+inline void client_connect(boost::system::error_code & ec,
+    HANDLE& pipe_ret,
+    std::string const & endpoint,
+    int timeout_ms
+){
+    
     HANDLE hPipe;
     BOOL fSuccess = FALSE;
     DWORD dwMode;
@@ -47,11 +52,13 @@ inline void client_connect(boost::system::error_code & ec, HANDLE& pipe_ret, std
 
         // All pipe instances are busy, so wait for 20 seconds.
 
-        if (!WaitNamedPipe(endpoint.c_str(), 20000))
+        if (!WaitNamedPipe(endpoint.c_str(), timeout_ms))
         {
-            printf("Could not open pipe: 20 second wait timed out.");
+            printf("Could not open pipe: %d second wait timed out.", timeout_ms/1000);
             //return -1;
-            ec = boost::asio::error::timed_out;
+            last_error = ::GetLastError();
+            ec = boost::system::error_code(last_error,
+                    boost::asio::error::get_system_category());
             return;
         }
     }

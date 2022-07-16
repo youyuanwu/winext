@@ -15,13 +15,14 @@ namespace details{
 // For server pipe.
 // create namedpipe and event, and make server listen on this pipe
 // and return handles to caller. caller is responsible to free the handles.
+// no action is taken on optr. User needs to release optr if accept success,
+// and complete with error if this failed;
 inline void accept_detail2(
         HANDLE& pipe_ret,
         boost::asio::windows::overlapped_ptr &optr,
         std::string const &endpoint, 
         boost::system::error_code & ret)
 {
-
     const int bufsize = 512;
 
     HANDLE hPipe = CreateNamedPipe( 
@@ -39,13 +40,14 @@ inline void accept_detail2(
 
     if (hPipe == INVALID_HANDLE_VALUE) 
     {
-        // printf("CreateNamedPipe failed with %d.\n", GetLastError());
+        printf("CreateNamedPipe failed with %d.\n", GetLastError());
         DWORD last_error = ::GetLastError();
         boost::system::error_code pec = boost::system::error_code(last_error,
                 boost::asio::error::get_system_category());
         ret = pec;
         return;
     }
+    pipe_ret = hPipe;
     // printf("created namedpipe\n");
     
     // pipe takes ownership of handles
@@ -57,11 +59,12 @@ inline void accept_detail2(
     // Overlapped ConnectNamedPipe should return zero. 
     if (fConnected)
     {
-        // printf("ConnectNamedPipe failed with %d.\n", GetLastError());
+        printf("ConnectNamedPipe failed with %d.\n", GetLastError());
         DWORD last_error = ::GetLastError();
         boost::system::error_code pec = boost::system::error_code(last_error,
                 boost::system::system_category());
         ret = pec;
+        // free handle?
         return;
     }
 
@@ -71,25 +74,29 @@ inline void accept_detail2(
         case ERROR_IO_PENDING: 
             // OS should have triggered callback
             // std::cout<< "pipe io pending" <<std::endl;
-            optr.release(); // let io_context own the callback
             break; 
         // Client is already connected, so signal an event. 
         case ERROR_PIPE_CONNECTED:
-            // std::cout<< "pipe already connected" <<std::endl;
-            if (SetEvent(optr.get()->hEvent)) // trigger callback here
-            {
-                optr.release(); // let io_context own the callback
-                break; 
-            }
-        // If an error occurs during the connect operation... 
-        default: 
         {
-            // printf("ConnectNamedPipe failed with %d.\n", GetLastError());
+            std::cout<< "pipe already connected" <<std::endl;
+            // In the win32 example here we need to reset the overlapp event when pipe already is connected.
+            // But this case overlapped_ptr cannot trigger this because iocp does not register this pipe instance.
+            // the caller needs to inspect this error message and trigger handler without using overlapped_ptr
             DWORD last_error = ::GetLastError();
             boost::system::error_code pec = boost::system::error_code(last_error,
                     boost::asio::error::get_system_category());
-            optr.complete(pec, 0);
             ret = pec;
+            break;
+        }
+        // If an error occurs during the connect operation... 
+        default: 
+        {   
+            printf("Some named pipe op failed with %d.\n", GetLastError());
+            DWORD last_error = ::GetLastError();
+            boost::system::error_code pec = boost::system::error_code(last_error,
+                    boost::asio::error::get_system_category());
+            ret = pec;
+            // free handle???
             return;
         }
     }
@@ -120,16 +127,27 @@ public:
        
         boost::asio::windows::overlapped_ptr optr(pipe_->get_executor(), 
             [self=std::move(self), p = pipe_](boost::system::error_code ec, std::size_t) mutable{
-                std::cout << "optr handler called."<< ec.message() << std::endl;
+                // std::cout << "optr handler called."<< ec.message() << std::endl;
                 self.complete(ec, std::move(*p));
             });
         
         details::accept_detail2(hPipe, optr, endpoint_, ec);
-        if(ec){
-            std::cout << "accept_detail2 failed:"<< ec.message() << std::endl;
-            self.complete(ec, std::move(*pipe_));
+        if(ec.failed()){
+            if(ec.value() == ERROR_PIPE_CONNECTED){
+                // If we treat this as io-pending and release optr, the iocp gets stuck.
+                // std::cout << "pipe already connected " << std::endl;
+                pipe_->assign(hPipe);
+                optr.complete(boost::system::error_code{}, 0);
+            }else{
+                // complete self is deferred to optr handler.
+                std::cout << "accept_detail2 failed:"<< ec.message() << std::endl;
+                optr.complete(ec, 0);
+            }
+        }else{
+            pipe_->assign(hPipe);
+            // complete self is deferred to optr handler.
+            optr.release();
         }
-        pipe_->assign(hPipe);
     }
 
 private:
@@ -165,11 +183,22 @@ public:
             });
         
         details::accept_detail2(hPipe, optr, endpoint_, ec);
-        if(ec){
-            std::cout << "accept_detail2 failed:"<< ec.message() << std::endl;
-            self.complete(ec);
+        if(ec.failed()){
+            if(ec.value() == ERROR_PIPE_CONNECTED){
+                // If we treat this as io-pending and release optr, the iocp gets stuck.
+                // std::cout << "pipe already connected " << std::endl;
+                pipe_->assign(hPipe);
+                optr.complete(boost::system::error_code{}, 0);
+            }else{
+                // complete self is deferred to optr handler.
+                std::cout << "accept_detail2 failed:"<< ec.message() << std::endl;
+                optr.complete(ec, 0);
+            }
+        }else{
+            pipe_->assign(hPipe);
+            // complete self is deferred to optr handler.
+            optr.release();
         }
-        pipe_->assign(hPipe);
     }
 
 private:

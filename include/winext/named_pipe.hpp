@@ -55,7 +55,7 @@ public:
     server_named_pipe(server_named_pipe&& other)
     : boost::asio::windows::basic_stream_handle<executor_type>(std::move(other))
     {
-        std::cout<< "pipe moved" << std::endl;
+        //std::cout<< "pipe moved" << std::endl;
     }
 
     ~server_named_pipe()
@@ -87,14 +87,14 @@ public:
       >::type = 0) : boost::asio::windows::basic_stream_handle<executor_type>(context.get_executor()){}
 
     BOOST_ASIO_SYNC_OP_VOID connect(const endpoint_type& endpoint,
-        boost::system::error_code& ec){
+        boost::system::error_code& ec, int timeout_ms = 20000){
         
         if(boost::asio::windows::basic_stream_handle<executor_type>::is_open()){
            boost::asio::windows::basic_stream_handle<executor_type>::close();
         }
 
         HANDLE hPipe = NULL;
-        details::client_connect(ec, hPipe, endpoint);
+        details::client_connect(ec, hPipe, endpoint, timeout_ms);
 
         if(ec)
         {

@@ -1,24 +1,20 @@
-#include <cstdlib>
-#include <iostream>
-#include <memory>
-#include <utility>
-#include "boost/asio.hpp"
-#include "winext/named_pipe_protocol.hpp"
-#include "echoserver.hpp"
-
-namespace net = boost::asio;
-using namespace winext;
+#include "echoserver_movable.hpp"
 
 int main(int argc, char* argv[])
 {
   try
   {
+    // if (argc != 2)
+    // {
+    //   std::cerr << "Usage: async_tcp_echo_server <port>\n";
+    //   return 1;
+    // }
 
     net::io_context io_context;
 
     named_pipe_protocol<net::io_context::executor_type>::endpoint ep("\\\\.\\pipe\\mynamedpipe");
 
-    server s(io_context, ep);
+    server_movable s(io_context, ep);
 
     io_context.run();
   }

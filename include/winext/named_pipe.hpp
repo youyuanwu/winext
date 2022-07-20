@@ -63,6 +63,9 @@ public:
         using pipe = boost::asio::windows::basic_stream_handle<executor_type>;
         if(pipe::is_open())
         {
+            // TODO: check error;
+            // Flush is needed since the server might close handle before client read.
+            FlushFileBuffers(pipe::native_handle());
             pipe::cancel();
             if(!DisconnectNamedPipe(pipe::native_handle())){
                 boost::system::error_code ec = boost::system::error_code(static_cast<int>(GetLastError()), boost::system::system_category());

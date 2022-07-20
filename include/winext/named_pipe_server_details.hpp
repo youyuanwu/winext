@@ -178,7 +178,7 @@ public:
        
         boost::asio::windows::overlapped_ptr optr(pipe_->get_executor(), 
             [self=std::move(self)](boost::system::error_code ec, std::size_t) mutable{
-                std::cout << "optr handler called."<< ec.message() << std::endl;
+                // std::cout << "optr handler called."<< ec.message() << std::endl;
                 self.complete(ec);
             });
         

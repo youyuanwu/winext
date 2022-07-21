@@ -9,6 +9,8 @@ echoserver_coro.cpp
 echoserver_movable.cpp
 echoserver.cpp
 echoclient.cpp
+http/beast_server.cpp
+http/beast_client.cpp
 )
 
 file(GLOB HEADERS

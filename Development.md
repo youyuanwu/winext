@@ -3,6 +3,10 @@ Testing commands:
 
 ```ps1
 Invoke-WebRequest http://localhost:12356/winhttpapitest/
+
+Invoke-WebRequest -UseBasicParsing  http://localhost:12356/winhttpapitest/ `
+    -ContentType "application/json" -Method POST -Body "{ 'ItemID':3661515, 'Name':'test'}" `
+    -Headers @{"myheader"="myvalue"}
 ```
 
 FYI http.sys supports trailers

@@ -20,26 +20,35 @@
 #include <string>
 #include <vector>
 #include <iostream>
+#include <functional>
 
 #pragma comment(lib, "httpapi.lib")
 
 namespace net = boost::asio;
 
-class http_connection : public std::enable_shared_from_this<http_connection>
+template <typename Executor = net::any_io_executor>
+class http_connection : public std::enable_shared_from_this<http_connection<Executor>>
 {
 public:
-    http_connection(winext::http::basic_http_handle<net::io_context::executor_type> & queue_handle)
+    typedef Executor executor_type;
+
+    http_connection(winext::http::basic_http_handle<executor_type> & queue_handle)
+        :   http_connection(queue_handle, [](const winext::http::simple_request<std::vector<CHAR>>& request, 
+                winext::http::simple_response<std::string>& response){
+                // default handler
+                response.set_status_code(503);
+                response.set_reason("Not Implemented");
+            })
+    { }
+
+    http_connection(winext::http::basic_http_handle<executor_type> & queue_handle,
+        std::function<void(const winext::http::simple_request<std::vector<CHAR>>&, 
+        winext::http::simple_response<std::string>&)> handler)
         :   queue_handle_(queue_handle),
-            buffer_(sizeof(HTTP_REQUEST) + 2048, 0),
-            resp_(),
-            data_chunk_(),
-            reason_(),
-            content_type_(),
-            body_()
-    {
-        PHTTP_REQUEST req = winext::http::phttp_request(net::buffer(buffer_));
-        HTTP_SET_NULL_ID( &req->RequestId );
-    }
+            request_(),
+            response_(),
+            handler_(handler)
+    { }
 
     void
     start()
@@ -48,87 +57,65 @@ public:
         // check_deadline();
     }
 
-private:
-    std::vector<CHAR>  buffer_; // buffer that backs request
-    
-    // response block
-    HTTP_RESPONSE resp_;
-    HTTP_DATA_CHUNK data_chunk_;
-    std::string reason_;
-    std::string content_type_;
-    std::string body_;
+    // void set_handler(std::function<void(const winext::http::simple_request<std::vector<CHAR>>&, 
+    //     winext::http::simple_response<std::string>&)> handler){
+    //         this->handler_ = handler;
+    // }
 
-    winext::http::basic_http_handle<net::io_context::executor_type> & queue_handle_;
+private:
+    // request block
+    winext::http::simple_request<std::vector<CHAR>> request_;
+    // response block
+    winext::http::simple_response<std::string> response_;
+
+    winext::http::basic_http_handle<executor_type> & queue_handle_;
+
+    std::function<void(const winext::http::simple_request<std::vector<CHAR>>&, winext::http::simple_response<std::string>&)> handler_;
 
     void
     receive_request()
     {
         std::cout << "connection receive_request" <<std::endl;
-        auto self = shared_from_this();
-        queue_handle_.async_recieve_request(net::buffer(buffer_),
+        auto self = this->shared_from_this();
+        queue_handle_.async_recieve_request(net::buffer(request_.get_request_buffer()),
         [self](boost::system::error_code ec, std::size_t){
             if(ec){
                 std::cout << "async_recieve_request failed: " << ec.message() <<std::endl;
             }else{
-                self->on_receive();
+                self->on_receive_request();
                 // start another connection
-                std::make_shared<http_connection>(self->queue_handle_)->start();
+                std::make_shared<http_connection>(self->queue_handle_, self->handler_)->start();
             }
         });
     }
 
-    void prepare_resp(USHORT        StatusCode){
-        resp_.StatusCode = StatusCode;
-        resp_.pReason = reason_.data();
-        resp_.ReasonLength = static_cast<USHORT>(reason_.size());
-
-        //
-        // Add a known header.
-        //
-        resp_.Headers.KnownHeaders[HttpHeaderContentType].pRawValue = content_type_.c_str();
-        resp_.Headers.KnownHeaders[HttpHeaderContentType].RawValueLength = static_cast<USHORT>(content_type_.size());            
-    
-        if(body_.c_str())
-        {
-            // 
-            // Add an entity chunk.
-            //
-            data_chunk_.DataChunkType           = HttpDataChunkFromMemory;
-            data_chunk_.FromMemory.pBuffer      = (PVOID) body_.c_str();
-            data_chunk_.FromMemory.BufferLength = (ULONG) body_.length();
-
-            resp_.EntityChunkCount         = 1;
-            resp_.pEntityChunks            = &data_chunk_;
-        }
+    void on_receive_request(){
+        auto self = this->shared_from_this();
+        queue_handle_.async_recieve_body(
+            net::buffer(request_.get_body_buffer()),
+            request_.get_request_id(),
+            0, // flag
+            [self](boost::system::error_code ec, std::size_t len){
+                if(ec){
+                    std::cout << "async_recieve_body failed: " << ec.message() <<std::endl;
+                }else{
+                    self->on_recieve_body(len);
+                }
+            });
     }
 
-    void on_receive(){
-        PHTTP_REQUEST req = winext::http::phttp_request(net::buffer(buffer_));
-        // ::on_receive(req, this->queue_handle_.native_handle());
-        wprintf(L"Got a request for %ws \n", req->CookedUrl.pFullUrl);
-        this->reason_ = "OK";
-        this->content_type_ = "text/html";
-        this->body_ = "Hey! You hit the server \r\n";
-        this->prepare_resp(200);
+    void on_recieve_body(std::size_t len){
+        request_.set_body_len(len);
+        // all request data is ready, invoke use handler
+        this->handler_(this->request_, this->response_);
 
-        auto self = shared_from_this();
+        auto self = this->shared_from_this();
         queue_handle_.async_send_response(
-            &this->resp_,
-            req->RequestId,
+            response_.get_response(),
+            request_.get_request_id(),
             HTTP_SEND_RESPONSE_FLAG_DISCONNECT, // single resp flag
             [self](boost::system::error_code ec, std::size_t){
                 std::cout << "async_send_response handler: " << ec.message() << std::endl; 
             });
-        
-        // boost::system::error_code ec;
-        // queue_handle_.send_response(
-        //     &this->resp_,
-        //     req->RequestId,
-        //     HTTP_SEND_RESPONSE_FLAG_DISCONNECT,
-        //     ec
-        // );
-        // if(ec.failed()){
-        //     std::cout << "sync send failed:" << ec.message() << std::endl;
-        // }
     }
 };

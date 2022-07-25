@@ -67,9 +67,9 @@ void invokeAPI(){
 
 TEST(HTTPServer, server) 
 {    
-  //test_server<server>();
    // init http module
     winext::http::http_initializer init;
+    // add https then this becomes https server
     std::wstring url = L"http://localhost:12356/winhttpapitest/";
     
     boost::system::error_code ec;
@@ -80,8 +80,22 @@ TEST(HTTPServer, server)
     queue.assign(winext::http::open_raw_http_queue());
     winext::http::http_simple_url simple_url(queue, url);
 
-    //myserver s(queue);
-    std::make_shared<http_connection>(queue)->start();
+    auto handler = [](const winext::http::simple_request<std::vector<CHAR>>& request, 
+                winext::http::simple_response<std::string>& response){
+                // handler for testing
+                PHTTP_REQUEST req = request.get_request();
+                std::wcout << L"Got a request for url: " << req->CookedUrl.pFullUrl 
+                   << L"VerbId: " << static_cast<int>(req->Verb) << std::endl;
+                std::cout << request << std::endl;
+                response.set_status_code(200);
+                response.set_reason("OK");
+                response.set_content_type("text/html");
+                response.set_body("Hey! You hit the server \r\n");
+                response.add_unknown_header("myRespHeader","myRespHeaderVal");
+                response.add_trailer("myTrailer", "myTrailerVal");
+            };
+
+    std::make_shared<http_connection<net::io_context::executor_type>>(queue, handler)->start();
 
     int server_count = 1;
     std::vector<std::thread> server_threads;
@@ -93,6 +107,9 @@ TEST(HTTPServer, server)
             io_context.run();
         });
     }
+
+    // uncomment this for manual testing
+    //io_context.run();
 
     // let server warm up
     std::this_thread::sleep_for(std::chrono::seconds(1));

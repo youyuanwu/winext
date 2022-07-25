@@ -111,7 +111,7 @@ namespace http{
             ULONG result = HttpReceiveHttpRequest(
                             this->native_handle(),          // Req Queue
                             pRequest->RequestId,          // Req ID
-                            0,                  // Flags
+                            0,                  // Flags. TODO: expose this
                             pRequest,           // HTTP request buffer
                             static_cast<ULONG>(buffers.size()),       // req buffer length
                             NULL,         // bytes received. must be null in async
@@ -134,6 +134,53 @@ namespace http{
             else if(result == ERROR_IO_PENDING){
                 optr.release();
             }else{
+                // error 
+                ec = boost::system::error_code(result,
+                        boost::asio::error::get_system_category());
+                optr.complete(ec, 0);
+            }
+        }
+
+        template <typename MutableBufferSequence,
+            BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+                std::size_t)) ReadHandler
+                BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+        BOOST_ASIO_INITFN_AUTO_RESULT_TYPE(ReadHandler,
+            void (boost::system::error_code, std::size_t))
+        async_recieve_body(const MutableBufferSequence& buffers,
+            HTTP_REQUEST_ID    requestId,
+            ULONG flags,
+            BOOST_ASIO_MOVE_ARG(ReadHandler) handler
+                BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        {
+            boost::asio::windows::overlapped_ptr optr(this->get_executor(), handler);
+            DWORD result = HttpReceiveRequestEntityBody(
+                this->native_handle(),
+                requestId,
+                flags,
+                (PVOID)buffers.data(),
+                static_cast<ULONG>(buffers.size()),
+                NULL,      //    BytesReturned,
+                optr.get()
+            );
+            boost::system::error_code ec;
+            if(result == ERROR_IO_PENDING){
+                //std::cout << "resp io pending" << std::endl;
+                optr.release();
+            }
+            else if(result == NO_ERROR){
+                // TODO: caller needs to call this recieve body again.
+                // until eof is reached.
+                optr.release();
+            }
+            else if(result == ERROR_HANDLE_EOF)
+            {
+                // no more data. success.
+                optr.complete(ec, 0);
+            }
+            else
+            {
+                // std::cout << "resp io error" << std::endl;
                 // error 
                 ec = boost::system::error_code(result,
                         boost::asio::error::get_system_category());
@@ -208,6 +255,8 @@ namespace http{
             ec = boost::system::error_code(result,
                         boost::asio::error::get_system_category());
         }
+
+
     };
 } // namespace http
 } // namespace winext
